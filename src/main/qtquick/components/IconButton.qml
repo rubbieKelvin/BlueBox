@@ -13,22 +13,19 @@ Rectangle {
     
     signal click()
 
+    Svg{id: svg}
+
     Image{
-        id: img
         anchors.centerIn: parent
         height: root.width-padding
         width: root.width-padding
         source: svg.uri
     }
 
-    Svg{
-        id: svg
-    }
-
     MouseArea {
         anchors.fill: parent
-        cursorShape: Qt.PointingHandCursor
-        hoverEnabled: true
+        cursorShape: root.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+        hoverEnabled: root.enabled
         onEntered: {}
         onExited: {}
         onWheel: {}

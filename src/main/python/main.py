@@ -3,6 +3,7 @@ import sys
 
 from PySide2 import QtQml
 from PySide2 import QtCore
+from PySide2 import QtQuickControls2
 
 from utils import organizer
 from fbs_runtime.application_context.PySide2 import ApplicationContext
@@ -15,6 +16,7 @@ if __name__ == '__main__':
     appctxt = ApplicationContext()
     organizer_ = organizer.Organizer()
 
+    QtQuickControls2.QQuickStyle.setStyle("Fusion")
     QtCore.QCoreApplication.setApplicationName("BlueBox")
     QtCore.QCoreApplication.setOrganizationName("stuffsbyrubbie")
     QtCore.QCoreApplication.setOrganizationDomain("com.rubbiekelvin.bluebox")

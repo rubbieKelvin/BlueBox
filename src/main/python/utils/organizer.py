@@ -68,6 +68,7 @@ class Organizer(QtCore.QObject):
 
     @QtCore.Slot(str)
     def removeMusicFolder(self, path):
+        self.scanStarted.emit()
         self.data["musicfolders"] = list(
             filter(lambda x:x!=path, self.data["musicfolders"])
         )
@@ -78,6 +79,7 @@ class Organizer(QtCore.QObject):
             if os.path.split(k)[0].startswith(path):
                 del self.data["audiofiles"][k]
 
+        self.scanComplete.emit()
         self.musicFolderUpdated.emit(self.folders)
         self.folderCountChanged.emit(self.folderCount)
         self.save()

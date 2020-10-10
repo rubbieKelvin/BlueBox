@@ -19,17 +19,23 @@ ApplicationWindow {
 
     property string elevationColor: "#33bdbdbd"
     property string accent: "#5860ff"
+    property bool scanning // if mediaManager is scanning; updated in load_bar_:Connections
     
     readonly property string conffile: ".config.ini"
 
+    function feedPlaylist(sources){
+        sources.forEach(element => {
+           playlist.addItem("file://"+element);
+        });
+    }
+
     function updatePlaylist(){
         playlist.clear();
+        meta.resetParams();
 
         if (settings.sessiontype==="*"){
             let sources = mediaManager.getAllAudioSources();
-            sources.forEach(element => {
-                playlist.addItem("file://"+element);
-            });
+            feedPlaylist(sources);
         }
     }
 
@@ -70,7 +76,22 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        updatePlaylist()
+        mediaManager.scan();
+    }
+
+    Connections {
+        target: mediaManager
+        
+        function onScanStarted() {
+            load_bar_.visible = true;
+            scanning = true;
+        }
+
+        function onScanComplete() {
+            load_bar_.visible = false;
+            scanning = false;
+            updatePlaylist();
+        }
     }
 
 
@@ -97,7 +118,16 @@ ApplicationWindow {
         property string artist
         property string albumart
         property string duration: "00:00"
-    }    
+        property real ms_duration
+
+        function resetParams(){
+            this.title = "";
+            this.artist = "";
+            this.albumart = "";
+            this.duration = "";
+            this.ms_duration = 0.0;
+        }
+    }
 
     Audio{
         id: player
@@ -119,7 +149,8 @@ ApplicationWindow {
                     meta.artist = isNone(meta_.artist) ? "Unknown" : meta_.artist;
                     meta.title  = isNone(meta_.title) ? "Unknown": meta_.title;
                     meta.albumart  = isNone(meta_.coverImage) ? "" : meta_.coverImage;
-                    meta.duration = timeFromDuration(player.duration);
+                    meta.ms_duration = meta_.duration;
+                    meta.duration = timeFromDuration(meta_.duration);
                 }
             }
         }
@@ -372,7 +403,7 @@ ApplicationWindow {
                 id: seeker
                 width: 343
                 height: 40
-                value: (player.position/player.duration)*100
+                value: (player.position/player.duration)*this.to
                 Layout.fillHeight: true
                 Layout.fillWidth: true
                 color: accent
@@ -380,6 +411,13 @@ ApplicationWindow {
                 to: 100
                 from: 0
                 hintColor: "#ededed"
+                enabled: player.seekable
+
+                onMoved: {
+                    player.seek(
+                        (this.value/this.to)*player.duration
+                    );
+                }
             }
 
             Label {
@@ -439,22 +477,6 @@ ApplicationWindow {
             width: parent.width
             enabled: visible
             visible: false
-            
-            Connections {
-                target: mediaManager
-                function onScanStarted() {
-                    load_bar_.visible = true;
-                }
-
-                function onScanComplete() {
-                    load_bar_.visible = false;
-                    
-                    if (settings.sessiontype === "*") {
-                        updatePlaylist();
-                    }
-                }
-            }
-            
         }
     }
 
@@ -586,13 +608,17 @@ ApplicationWindow {
                     font.weight: Font.Medium
                 }
 
-                Button{
-                    text: "add"
+                Ui.IconButton{
+                    source: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M13 11H22V13H13V22H11V13H2V11H11V2H13V11Z" fill="black"/></svg>'
                     anchors.right: parent.right
                     anchors.rightMargin: 10
-                    width: 50
-                    height: 30
-                    onClicked: addmusicfolder.open()
+                    width: 20
+                    height: 20
+                    padding: 8
+                    color: "transparent"
+                    accent: appwindow.accent
+                    enabled: !scanning
+                    onClick: addmusicfolder.open()
                 }
             }
             
@@ -609,10 +635,6 @@ ApplicationWindow {
 
                     onRemoveRequested: {
                         mediaManager.removeMusicFolder(modelData.path);
-                        
-                        if (settings.sessiontype === "*"){
-                            updatePlaylist();
-                        }
                     }
                 }
             }

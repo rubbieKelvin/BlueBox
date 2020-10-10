@@ -40,7 +40,6 @@
         "./.gitignore",
         "./bluebox.pyproject",
         "./.config.ini",
-        "./README.md",
-        "./.data.json"
+        "./README.md"
     ]
 }

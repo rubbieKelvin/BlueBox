@@ -25,7 +25,8 @@ getfiles('.', ignore=[
     '__pycache__',
     '.git',
     '.writer',
-    'run.dev.sh'
+    'run.dev.sh',
+    '.data.json'
 ])
 
 with open(projectname+'.pyproject', 'w') as file:
