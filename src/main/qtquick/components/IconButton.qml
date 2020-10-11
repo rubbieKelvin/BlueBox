@@ -6,6 +6,7 @@ Rectangle {
     id: root
     width: 25
     height: 25
+    color: "transparent"
 
     property alias source: svg.source
     property int padding: 5
@@ -29,7 +30,10 @@ Rectangle {
         onEntered: {}
         onExited: {}
         onWheel: {}
-        onClicked: click()
+        onClicked: {
+            focus = true;
+            click();
+        }
     }
 }
 

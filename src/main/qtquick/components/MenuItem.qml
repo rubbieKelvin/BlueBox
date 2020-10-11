@@ -14,6 +14,8 @@ Rectangle {
     property alias text: label.text
     property alias source: svg.source
     property string textColor: "#000000"
+    property string highlightText: "#ffffff"
+    property alias fontsize: label.font.pixelSize
 
     signal click()
     
@@ -39,8 +41,9 @@ Rectangle {
 
     Svg{
         id: svg
-        color: (highlighted) ? "#ffffff":textColor
+        color: (highlighted) ? highlightText:textColor
     }
+
 
     Label {
         id: label
@@ -53,22 +56,23 @@ Rectangle {
         anchors.left: parent.left
         anchors.leftMargin: 46
         anchors.verticalCenter: parent.verticalCenter
-        color: (highlighted) ? "#ffffff":textColor
+        color: (highlighted) ? highlightText:textColor
 
     }
-    
     
     MouseArea {
         anchors.fill: parent
         cursorShape: Qt.PointingHandCursor
         hoverEnabled: false
-        onClicked: click()
+        onClicked: {
+            focus = true;
+            click();
+        }
     }
-    
 }
 
 /*##^##
 Designer {
-    D{i:3;anchors_width:146;anchors_x:46}
+    D{i:3;anchors_width:146;anchors_x:46}D{i:6;anchors_height:100;anchors_width:100}
 }
 ##^##*/

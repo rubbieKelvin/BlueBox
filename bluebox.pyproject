@@ -21,6 +21,7 @@
         "./src/main/qtquick/components/RoundImage.qml",
         "./src/main/qtquick/components/Box.qml",
         "./src/main/qtquick/components/Svg.qml",
+        "./src/main/qtquick/components/widgets/PlaylistWidget.qml",
         "./src/main/qtquick/components/MenuItem.qml",
         "./src/main/qtquick/components/IconButton.qml",
         "./src/main/qtquick/components/SlideBar.qml",

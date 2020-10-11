@@ -6,6 +6,7 @@ Slider {
     
     property string color: "#000000"
     property string hintColor: "#bdbdbd"
+    property string dotColor: "#ffffff"
 
     background: Rectangle {
          x: root.leftPadding
@@ -34,7 +35,7 @@ Slider {
          color: root.pressed ? "#f0f0f0" : root.color
 
          Rectangle{
-             color: "#ffffff"
+             color: dotColor
              width: parent.width-8
              height: parent.height-8
              radius: width/2

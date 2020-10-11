@@ -21,8 +21,8 @@ class Music:
 
             tag = audio.tag
             if tag:
-                self.meta["title"] = tag.title
-                self.meta["artist"] = tag.artist
+                self.meta["title"] = None if tag.title == None else tag.title.strip()
+                self.meta["artist"] = None if tag.artist == None else tag.artist.strip()
 
                 # extract image
                 if len(tag.images) > 0:
@@ -31,6 +31,7 @@ class Music:
                     buffer.write(img.image_data)
                     uri = b64encode(buffer.getvalue()).decode("ascii")
                     self.meta["coverImage"] = f"data:{img.mime_type};base64,{uri}" 
+
 
 class MediaScanner(QtCore.QRunnable):
     RUNNING = False

@@ -5,6 +5,11 @@ from workers import scanner
 
 from services.extcrawler import path_from_url
 
+QVariantList = "QVariantList"
+QVariant = "QVariant"
+
+PLAYLIST_CACHE = dict()
+
 class Organizer(QtCore.QObject):
     PATH = ".data.json"
 
@@ -13,12 +18,11 @@ class Organizer(QtCore.QObject):
         self.threadpool = QtCore.QThreadPool()
         self.load()
 
-    scanStarted = QtCore.Signal()
-    scanError   = QtCore.Signal()
-    scanComplete = QtCore.Signal()
-    folderCountChanged = QtCore.Signal(int)
-
-    musicFolderUpdated = QtCore.Signal("QVariantList")
+    scanStarted = QtCore.Signal()           # scanning media folders completed
+    scanError   = QtCore.Signal()           # scanning media player error
+    scanComplete = QtCore.Signal()          # scanning media player completed
+    folderCountChanged = QtCore.Signal(int) # number of media folders changed
+    musicFolderUpdated = QtCore.Signal(QVariantList)    # media player list has been updated
     
     def parsefolderModel(self, path) -> dict:
         return dict(
@@ -53,7 +57,7 @@ class Organizer(QtCore.QObject):
 
         self.threadpool.start(worker)
 
-    @QtCore.Property("QVariantList", notify=musicFolderUpdated)
+    @QtCore.Property(QVariantList, notify=musicFolderUpdated)
     def folders(self):
         return [self.parsefolderModel(path) for path in self.data.get("musicfolders")]
 
@@ -84,11 +88,11 @@ class Organizer(QtCore.QObject):
         self.folderCountChanged.emit(self.folderCount)
         self.save()
 
-    @QtCore.Slot(result="QVariantList")
+    @QtCore.Slot(result=QVariantList)
     def getAllAudioSources(self):
         return list(self.data["audiofiles"].keys())
 
-    @QtCore.Slot(str, result="QVariant")
+    @QtCore.Slot(str, result=QVariant)
     def getMetaData(self, path):
         path = path_from_url(path)
         return self.data["audiofiles"].get(path, {})
@@ -96,3 +100,16 @@ class Organizer(QtCore.QObject):
     @QtCore.Property(int, notify=folderCountChanged)
     def folderCount(self):
         return len(self.data.get("musicfolders"))
+
+    @QtCore.Slot(str, int, result=QVariant)
+    def getPlaylistItem(self, playlist_id, index):
+        if playlist_id == "*":
+            if playlist_id not in PLAYLIST_CACHE:
+                PLAYLIST_CACHE[playlist_id] = list(self.data['audiofiles'].values())
+                PLAYLIST_CACHE[playlist_id].sort(key=lambda x:x["title"] if x["title"] else "_")
+            return PLAYLIST_CACHE[playlist_id][index]
+
+    @QtCore.Slot(str, result=int)
+    def getPlaylistCount(self, playlist_id):
+        if playlist_id == "*":
+            return len(self.data["audiofiles"].values())

@@ -4,39 +4,72 @@ import QtQuick.Layouts 1.11
 import QtQuick.Dialogs 1.0
 import QtMultimedia 5.15
 
-import "./components" as Ui
 import QtGraphicalEffects 1.13
 import Qt.labs.settings 1.0
+
+import "./components" as Ui
+import "./components/widgets" as UiWidgets
 
 ApplicationWindow {
     id: appwindow
     visible: true
-    width: 1100
-    height: 700
+    width: 1000
+    height: 680
     flags: Qt.Window | Qt.FramelessWindowHint
-    color: "#f8f9fb"
+    color: colors.bg
     font.family: "Poppins"
 
-    property string elevationColor: "#33bdbdbd"
-    property string accent: "#5860ff"
-    property bool scanning // if mediaManager is scanning; updated in load_bar_:Connections
-    
+
+    // custom properties
+    property string elevationColor: "#30bdbdbd"
+    property string accent: colors.pirple
+    property bool scanning // if mediaManager is scanning; updated in load_bar_:Connections 
     readonly property string conffile: ".config.ini"
 
-    function feedPlaylist(sources){
-        sources.forEach(element => {
-           playlist.addItem("file://"+element);
+    property variant playlistsources: ([])
+
+
+    // methods
+    // updates playlist sources
+    function feedPlaylist(){
+        playlistsources.forEach(element => {
+           playlist.addItem("file://"+element.source);
         });
     }
 
+    // gets playlist item one by one from python
+    function getPlaylistItem(playlist_id, index){
+        try{
+            let i = mediaManager.getPlaylistItem(playlist_id, index);
+            return meta.parseMeta(i, true);
+        } catch (e) {
+            return undefined;
+        }
+    }
+
+    // gets playlist from python
+    function getPlaylist(playlist_id){
+        let list_length = mediaManager.getPlaylistCount(playlist_id);
+        let list_ = [];
+
+        for (let i=0; i<list_length; i++){
+            let item = getPlaylistItem(playlist_id, i);
+            if (item !== undefined) list_.push(item);
+        }
+
+        return list_;
+    }
+
+    // updates our playlist; feeding it with updated sources
     function updatePlaylist(){
         playlist.clear();
         meta.resetParams();
 
-        if (settings.sessiontype==="*"){
-            let sources = mediaManager.getAllAudioSources();
-            feedPlaylist(sources);
-        }
+        playlistsources = getPlaylist(settings.sessiontype);
+        feedPlaylist();
+        // nextsources.loadNextSources();
+        meta.loadMeta(playlistsources[0]);
+
     }
 
     function shorten(string, max){
@@ -75,27 +108,26 @@ ApplicationWindow {
         return time;
     }
 
+    // once this is completed...
     Component.onCompleted: {
         mediaManager.scan();
     }
 
+    // Connections to mediaManager[python] signals
     Connections {
         target: mediaManager
         
         function onScanStarted() {
-            load_bar_.visible = true;
             scanning = true;
         }
 
         function onScanComplete() {
-            load_bar_.visible = false;
             scanning = false;
             updatePlaylist();
         }
     }
 
-
-    // QObjects
+    // audio settings
     Settings{
         id: settings
         category: "audio"
@@ -112,50 +144,134 @@ ApplicationWindow {
         onSessiontypeChanged: updatePlaylist()
     }
 
+    // font
+    Settings{
+        id: fontconfig
+        category: "font"
+        fileName: conffile
+
+        property int text: 10
+        property int heading: 12
+    }
+
+    // meta object: holds current media meta data
     QtObject {
         id: meta
         property string title
         property string artist
         property string albumart
+        property string source
         property string duration: "00:00"
         property real ms_duration
 
+        // clears meta data
         function resetParams(){
             this.title = "";
             this.artist = "";
             this.albumart = "";
             this.duration = "";
             this.ms_duration = 0.0;
+            this.source = "";
+        }
+
+        function parseMeta(meta_, result=false){
+            // feeds python meta dict to qml meta object
+            
+            let parsed_meta = {
+                artist: isNone(meta_.artist) ? "Unknown" : meta_.artist,
+                title: isNone(meta_.title) ? "Unknown": meta_.title,
+                albumart: isNone(meta_.coverImage) ? "" : meta_.coverImage,
+                ms_duration: isNone(meta_.duration) ? 0.0 : meta_.duration,
+                source: meta_.source,
+                duration: timeFromDuration(
+                    isNone(meta_.duration) ? 0.0 : meta_.duration
+                )
+            };
+
+            if (result) return parsed_meta;
+            this.loadMeta(parsed_meta);
+        }
+
+        // feeds meta data from already parsed meta
+        function loadMeta(parsed_meta){
+            this.artist = parsed_meta.artist;
+            this.title  = parsed_meta.title;
+            this.albumart  = parsed_meta.albumart;
+            this.ms_duration = parsed_meta.ms_duration;
+            this.duration = parsed_meta.duration;
+            this.source = parsed_meta.source;
         }
     }
 
-    Audio{
-        id: player
-        volume: vol_slider.value
+    // color settings
+    Settings{
+        category: "color"
+        fileName: conffile
+        property alias light : colors.light
+    }
 
-        property bool isPLaying: playbackState == Audio.PlayingState
+    // Object for holding color values
+    QtObject {
+        id: colors
+        property bool light: true
 
-        playlist: Playlist{
-            id: playlist
-        }
+        // Color Values
+        property string bg:     light ? "#ffffff" : "#292929"
+        property string red:    light ? "#FF3B30" : "#FF453A"
+        property string orange: light ? "#FF9500" : "#FF9F0A"
+        property string yellow: light ? "#FFCC00" : "#FFD60A"
+        property string green:  light ? "#34C759" : "#32D74B"
+        property string sky:    light ? "#5AC8FA" : "#64D2FF"
+        property string blue:   light ? "#007AFF" : "#0A84FF"
+        property string indigo: light ? "#5856D6" : "#5E5CE6"
+        property string pirple: light ? "#AF52DE" : "#BF5AF2"
+        property string pink:   light ? "#FF2D55" : "#FF2D55"
+        property string gray1:  light ? "#8E8E93" : "#8E8E93"
+        property string gray2:  light ? "#AEAEB2" : "#636366"
+        property string gray3:  light ? "#C7C7CC" : "#48484A"
+        property string gray4:  light ? "#D1D1D6" : "#3A3A3C"
+        property string gray5:  light ? "#E5E5EA" : "#2C2C2E"
+        property string gray6:  light ? "#F2F2F7" : "#1C1C1E"
+        property string text:   light ? "#333333" : "#ffffff"
+        property string hint:   gray2   // TODO: set a standard for this color
+    }
 
-        onStatusChanged:{
-            if (status === Audio.Buffered){
-                let path = playlist.currentItemSource.toString();
-                
-                if (path.length > 1){
-                    let meta_ = mediaManager.getMetaData(path);
-                    
-                    meta.artist = isNone(meta_.artist) ? "Unknown" : meta_.artist;
-                    meta.title  = isNone(meta_.title) ? "Unknown": meta_.title;
-                    meta.albumart  = isNone(meta_.coverImage) ? "" : meta_.coverImage;
-                    meta.ms_duration = meta_.duration;
-                    meta.duration = timeFromDuration(meta_.duration);
-                }
+    // list containing the next songs to be played
+    ListModel{
+        id: nextsources
+
+        function loadNextSources(){
+            this.clear();
+            for (let i = playlist.currentIndex+1; i < playlist.itemCount; i++) {
+                let meta_data = playlistsources[i];
+                this.append(meta_data);
             }
         }
     }
 
+    // audio object: plays audio
+    Audio{
+        id: player
+        volume: vol_slider.value
+        property bool isPLaying: playbackState == Audio.PlayingState
+
+        playlist: Playlist{
+            id: playlist
+
+            onCurrentIndexChanged: {
+                meta.loadMeta(playlistsources[currentIndex]);
+                // nextsources.loadNextSources();
+            }
+        }
+
+        onStatusChanged:{
+            if (status === Audio.Buffered){
+                // load next-sources model
+            }
+        }
+    }
+
+    // file dialog for selecting music folders
     FileDialog{
         id: addmusicfolder
         selectFolder: true
@@ -165,13 +281,14 @@ ApplicationWindow {
         }
     }
 
-    // Window Manager
+    // Window Manager: header
     Rectangle {
         id: header
         height: 50
         width: parent.width
-        color: "#f8f9fb"
+        color: "transparent"
 
+        // mouse handler for wm
         MouseArea {
             anchors.fill: parent
 
@@ -210,29 +327,56 @@ ApplicationWindow {
             }
         }
 
-        TextField {
-            id: searchField
-            x: 263
-            width: 296
-            height: 36
+        Rectangle{
             anchors.verticalCenterOffset: 0
-            font.pixelSize: 12
+            height: 30
             anchors.verticalCenter: parent.verticalCenter
-            placeholderText: qsTr("Type Song or Artist...")
-            selectByMouse: true
-            mouseSelectionMode: TextInput.SelectCharacters
-            layer.enabled: true
-            layer.effect: DropShadow {
-                transparentBorder: true
-                horizontalOffset: 0
-                verticalOffset: 0
-                radius: 20
-                spread: 0
-                color: elevationColor
+            radius: height/2
+            anchors.right: parent.right
+            anchors.rightMargin: 158
+            anchors.left: parent.left
+            anchors.leftMargin: 263
+            border.width: 1
+            border.color: colors.gray5
+            color: "transparent"
+
+            TextField {
+                id: searchField
+                anchors.right: searchButton.left
+                anchors.bottom: parent.bottom
+                anchors.left: parent.left
+                anchors.top: parent.top
+                font.pixelSize: fontconfig.text
+                placeholderText: qsTr("Type Song or Artist...")
+                selectByMouse: true
+                mouseSelectionMode: TextInput.SelectCharacters
+                layer.enabled: true
+                background: Rectangle{color: "transparent"}
+                anchors.rightMargin: 5
+                anchors.leftMargin: 10
+                color: colors.text
+                layer.effect: DropShadow {
+                    transparentBorder: true
+                    horizontalOffset: 0
+                    verticalOffset: 0
+                    radius: 10
+                    spread: 0
+                    color: elevationColor
+                }
+
             }
-            background: Rectangle{
-                color: "#ffffff"
-                radius: height/2
+
+            Ui.IconButton{
+                id: searchButton
+                width: 30
+                height: 30
+                color: "transparent"
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right
+                anchors.rightMargin: 10
+                accent: appwindow.accent
+                source: '<svg role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-labelledby="searchIconTitle" stroke="black" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" fill="none" color="#EB5757"> <title id="searchIconTitle">Search</title> <path d="M14.4121122,14.4121122 L20,20"/> <circle cx="10" cy="10" r="6"/> </svg>'
+                padding: 10
             }
         }
 
@@ -242,10 +386,10 @@ ApplicationWindow {
             y: 8
             width: 150
             height: 34
-            color: "#26282a"
+            color: colors.text
             text: qsTr("All Songs")
             font.weight: Font.Medium
-            font.pixelSize: 16
+            font.pixelSize: fontconfig.heading
             verticalAlignment: Text.AlignVCenter
             anchors.verticalCenter: parent.verticalCenter
         }
@@ -268,34 +412,41 @@ ApplicationWindow {
                 Qt.quit();
             }
         }
+
+        BusyIndicator {
+            id: busyIndicator
+            x: 910
+            y: 8
+            width: 25
+            height: 25
+            anchors.right: parent.right
+            anchors.rightMargin: 65
+            anchors.verticalCenterOffset: 0
+            anchors.verticalCenter: parent.verticalCenter
+            running: scanning
+        }
     }
 
-    Rectangle {
+    // footer
+    Ui.Box {
         id: footer
         y: 618
         height: 70
-        color: "#ffffff"
+        color: accent
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.left: parent.left
-        layer.enabled: true
-        layer.effect: DropShadow {
-            transparentBorder: true
-            horizontalOffset: 0
-            verticalOffset: -5
-            radius: 20
-            spread: 0
-            color: elevationColor
-        }
+        strokeTop: 1
+        strokecolor: colors.gray5
 
         Ui.RoundImage {
             x: 20
             id: albumart
-            radius: 15
+            radius: 8
             anchors.verticalCenterOffset: 0
             anchors.verticalCenter: parent.verticalCenter
-            width: 55
-            height: 55
+            width: 45
+            height: 45
             source: meta.albumart
             fillMode: Image.PreserveAspectFit
         }
@@ -304,26 +455,30 @@ ApplicationWindow {
             x: 88
             y: 8
             width: 200
-            height: 54
+            height: 40
+            anchors.verticalCenter: parent.verticalCenter
 
             Label {
-                id: song_artist
-                text: shorten(meta.artist, 24)
+                id: song_title
+                color: "#ffffff"
                 font.weight: Font.Medium
-                font.pixelSize: 14
+                font.pixelSize: fontconfig.heading
+                text: shorten(meta.title, 24)
                 verticalAlignment: Text.AlignVCenter
                 Layout.fillHeight: true
                 Layout.fillWidth: true
             }
 
             Label {
-                id: song_title
-                text: shorten(meta.title, 24)
-                font.pixelSize: 11
+                id: song_artist
+                color: "#ffffff"
+                text: shorten(meta.artist, 24)
+                font.pixelSize: fontconfig.text
                 verticalAlignment: Text.AlignVCenter
                 horizontalAlignment: Text.AlignLeft
                 Layout.fillHeight: true
                 Layout.fillWidth: true
+                opacity: .7
             }
         }
 
@@ -337,7 +492,7 @@ ApplicationWindow {
 
             Ui.IconButton{
                 id: prev_btn
-                accent: "#c8c8c8"
+                accent: "#ffffff"
                 padding: 15
                 width: 30
                 height: 30
@@ -349,12 +504,12 @@ ApplicationWindow {
 
             Ui.IconButton{
                 id: pplay_btn
-                color: appwindow.accent
+                color: "#ffffff"
                 padding: 15
                 width: 30
                 height: 30
                 radius: width/2
-                accent: "#ffffff"
+                accent: appwindow.accent
 
                 property string playsource: '<svg viewBox="0 0 15 15" class="bi bi-play-fill" fill="black" xmlns="http://www.w3.org/2000/svg"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>'
                 property string pausesource: '<svg viewBox="0 0 15 15" class="bi bi-pause-fill" fill="black" xmlns="http://www.w3.org/2000/svg"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z"/></svg>'
@@ -370,7 +525,7 @@ ApplicationWindow {
 
             Ui.IconButton{
                 id: forw_btn
-                accent: "#c8c8c8"
+                accent: "#ffffff"
                 padding: 15
                 width: 30
                 height: 30
@@ -394,9 +549,10 @@ ApplicationWindow {
             Label {
                 id: currentTime
                 text: timeFromDuration(player.position)
-                font.pixelSize: 12
+                font.pixelSize: fontconfig.text
                 verticalAlignment: Text.AlignVCenter
                 Layout.fillHeight: true
+                color: "#ffffff"
             }
 
             Ui.SlideBar {
@@ -406,11 +562,12 @@ ApplicationWindow {
                 value: (player.position/player.duration)*this.to
                 Layout.fillHeight: true
                 Layout.fillWidth: true
-                color: accent
+                color: "#ffffff"
+                dotColor: appwindow.accent
                 stepSize: 0.1
                 to: 100
                 from: 0
-                hintColor: "#ededed"
+                hintColor: "#55ffffff"
                 enabled: player.seekable
 
                 onMoved: {
@@ -424,8 +581,9 @@ ApplicationWindow {
                 id: duration
                 text: meta.duration
                 verticalAlignment: Text.AlignVCenter
-                font.pixelSize: 12
+                font.pixelSize: fontconfig.text
                 Layout.fillHeight: true
+                color: "#ffffff"
             }
         }
 
@@ -448,12 +606,13 @@ ApplicationWindow {
             Ui.SlideBar {
                 id: vol_slider
                 Layout.fillWidth: true
-                color: accent
+                color: "#ffffff"
                 to: 1
                 stepSize: 0.1
                 from: 0
                 live: true
-                hintColor: "#ededed"
+                hintColor: "#55ffffff"
+                dotColor: appwindow.accent
             }
 
             Ui.Svg{
@@ -464,22 +623,13 @@ ApplicationWindow {
                 readonly property string volume_off: '<svg viewBox="0 0 15 15" class="bi bi-volume-off-fill" fill="black" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M10.717 3.55A.5.5 0 0 1 11 4v8a.5.5 0 0 1-.812.39L7.825 10.5H5.5A.5.5 0 0 1 5 10V6a.5.5 0 0 1 .5-.5h2.325l2.363-1.89a.5.5 0 0 1 .529-.06z"/></svg>'
 
                 source: (vol_slider.value > 50) ? volume_loud : (vol_slider.value > 0) ? volume_quiet : volume_off
-                color: "#c8c8c8"
+                color: "#ffffff"
             }
 
         }
-
-        ProgressBar{
-            id: load_bar_
-            indeterminate: true
-            anchors.bottom: parent.bottom
-            height: 3
-            width: parent.width
-            enabled: visible
-            visible: false
-        }
     }
 
+    // side bar
     Ui.Box {
         id: side
         x: 10
@@ -490,7 +640,7 @@ ApplicationWindow {
         anchors.top: header.bottom
         anchors.topMargin: 10
         strokeRight: 1
-        strokecolor: "#ededed"
+        strokecolor: colors.gray5
 
         ColumnLayout {
             id: menu
@@ -507,8 +657,10 @@ ApplicationWindow {
                 text: "Box"
                 highlighted: menu.current==0
                 Layout.fillWidth: true
-                textColor: "#cacad2"
+                textColor: colors.hint
+                highlightText: "#ffffff"
                 source: '<svg viewBox="0 0 16 16" class="bi bi-file-music-fill" fill="black" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M12 1H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2zM8.725 3.793A1 1 0 0 0 8 4.754V10.2a2.52 2.52 0 0 0-1-.2c-1.105 0-2 .672-2 1.5S5.895 13 7 13s2-.672 2-1.5V6.714L11.5 6V4.326a1 1 0 0 0-1.275-.962l-1.5.429z"/></svg>'
+                fontsize: fontconfig.text
                 onClick: menu.current=0
             }
 
@@ -516,10 +668,12 @@ ApplicationWindow {
                 highlightColor: accent
                 text: "Music Folders"
                 Layout.fillWidth: true
-                textColor: "#cacad2"
+                textColor: colors.hint
+                fontsize: fontconfig.text
                 source: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M18 21C19.1046 21 20 20.1046 20 19H21C22.1046 19 23 18.1046 23 17V7C23 5.89543 22.1046 5 21 5H20C20 3.89543 19.1046 3 18 3H6C4.89543 3 4 3.89543 4 5H3C1.89543 5 1 5.89543 1 7V17C1 18.1046 1.89543 19 3 19H4C4 20.1046 4.89543 21 6 21H18ZM18 5V19H6V5H18ZM12 12.1405V7.13148L16.5547 10.1679L15.4453 11.8321L14 10.8685V14.5C14 15.9534 12.6046 17 11 17C9.39543 17 8 15.9534 8 14.5C8 13.0466 9.39543 12 11 12C11.3471 12 11.6845 12.049 12 12.1405ZM3 7H4V17H3V7ZM20 17H21V7H20V17ZM12 14.5C12 14.7034 11.6046 15 11 15C10.3954 15 10 14.7034 10 14.5C10 14.2966 10.3954 14 11 14C11.6046 14 12 14.2966 12 14.5Z" fill="black"/></svg>'
                 highlighted: menu.current==1
                 onClick: menu.current=1
+                highlightText: "#ffffff"
             }
         }
 
@@ -533,12 +687,16 @@ ApplicationWindow {
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 10
             Layout.fillWidth: true
-            highlightable: false
-            textColor: "#cacad2"
+            textColor: colors.hint
+            highlightText: "#ffffff"
+            fontsize: fontconfig.text
+            highlighted: menu.current==2
+            onClick: menu.current=2
             source: '<svg viewBox="0 0 16 16" class="bi bi-toggles" fill="black" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M4.5 9a3.5 3.5 0 1 0 0 7h7a3.5 3.5 0 1 0 0-7h-7zm7 6a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zm-7-14a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zm2.45 0A3.49 3.49 0 0 1 8 3.5 3.49 3.49 0 0 1 6.95 6h4.55a2.5 2.5 0 0 0 0-5H6.95zM4.5 0h7a3.5 3.5 0 1 1 0 7h-7a3.5 3.5 0 1 1 0-7z"/></svg>'
         }
     }
 
+    // main
     StackLayout {
         id: stack
         anchors.leftMargin: 10
@@ -558,30 +716,111 @@ ApplicationWindow {
             background: Rectangle{color:"transparent"}
 
             StackLayout{
-                currentIndex: Number(mediaManager.folderCount>0)
+                currentIndex: 1//Number(mediaManager.folderCount>0)
                 anchors.fill: parent
                 
-
                 Page{
                     // no media
                     background: Rectangle{color:"transparent"}
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    
 
-                    ColumnLayout{
+                    Rectangle{
                         anchors.centerIn: parent
-                        
-                        Label{
-                            text: "No Music Folder to scan through"
+                        width: 100
+                        height: 60
+
+                        RowLayout{
+                            anchors.fill: parent
+                            spacing: 15
+
+                            Image {
+                                source: __1_.uri
+                                width: 55
+                                height: 55
+                            }
+
+                            Ui.Svg{
+                                id: __1_
+                                source: '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-labelledby="folderAddIconTitle" stroke="black" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" fill="none" color="#EB5757"> <title id="folderAddIconTitle">Add to folder</title> <path d="M3 5H9L10 7H21V19H3V5Z"/> <path d="M15 13H9"/> <path d="M12 10V16"/> </svg>'
+                                color: appwindow.accent
+                            }
+
+                            Label{
+                                text: "Add Music Folder"
+                                font.pixelSize: fontconfig.text
+                                color: colors.hint
+                            }
+                        }
+
+                        MouseArea{
+                            anchors.fill: parent
+                            onClicked: addmusicfolder.open()
+                            cursorShape: Qt.PointingHandCursor
                         }
                     }
                 }
 
                 Page{
+                    id: page
                     background: Rectangle{color:"transparent"}
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+
+                    Rectangle{
+                        width: 300
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: 10
+                        anchors.top: parent.top
+                        anchors.topMargin: 10
+                        anchors.right: parent.right
+                        anchors.rightMargin: 10
+                        border.width: 1
+                        border.color: colors.gray5
+                        radius: 10
+
+                        ScrollView {
+                            anchors.rightMargin: 5
+                            anchors.leftMargin: 5
+                            anchors.bottomMargin: 0
+                            anchors.fill: parent
+                            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+
+                            ListView {
+                                spacing: 3
+                                anchors.fill: parent
+                                model: playlistsources.slice(playlist.currentIndex+1, playlist.itemCount)
+                                clip: true
+                                delegate: Rectangle{
+                                    color: "transparent"
+                                    height: 60
+
+                                    RowLayout{
+                                        ColumnLayout{
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            Label{
+                                                text: modelData.title
+                                                font.pixelSize: fontconfig.heading
+                                            }
+
+                                            Label{
+                                                text: modelData.artist
+                                                font.pixelSize: fontconfig.text
+                                                opacity: .7
+                                            }
+                                        }
+
+                                        Label{
+                                            Layout.fillHeight: true
+                                            text: modelData.duration
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                    }
                     
                 }
             }
@@ -604,7 +843,7 @@ ApplicationWindow {
                     x: 10
                     text: qsTr("Music Folders")
                     anchors.verticalCenter: parent.verticalCenter
-                    font.pixelSize: 12
+                    font.pixelSize: fontconfig.text
                     font.weight: Font.Medium
                 }
 
@@ -638,6 +877,11 @@ ApplicationWindow {
                     }
                 }
             }
+        }
+
+        Page {
+            id: settingspage
+            background: Rectangle{color:"transparent"}
         }
     }
 
